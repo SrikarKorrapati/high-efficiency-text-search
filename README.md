@@ -4,6 +4,8 @@ A simple C++ program that finds multiple patterns in a line of text using Rabin�
 
 Patterns are grouped by length. For each group, Rabin–Karp updates three separate polynomial hashes as a window moves through the text. Each hash uses its own base and modulus. The Bloom filter uses one probe from each hash, with integer mixing to spread short strings across the bitset. Possible matches are looked up using the first hash and checked against the actual text, so hash collisions never produce incorrect results.
 
+A polynomial hash’s base does not have to be prime, and choosing primes does not eliminate collisions.
+
 ## Build and run
 
 ```sh
