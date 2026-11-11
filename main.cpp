@@ -1,4 +1,6 @@
+#include <array>
 #include <bitset>
+#include <cstdint>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -8,26 +10,44 @@
 
 using namespace std;
 
-const long long BASE = 256;
-const long long MOD = 1000000007;
+struct HashParameters {
+    long long base;
+    long long modulus;
+};
+
+// Three separately computed polynomial hash functions.
+constexpr array<HashParameters, 3> HASH_PARAMETERS{{
+    {256, 1000000007},
+    {257, 1000000009},
+    {263, 998244353},
+}};
+
+using HashValues = array<long long, HASH_PARAMETERS.size()>;
 
 class BloomFilter {
     static const int SIZE = 100003;
     // 100,003 bits require approximately 12.5 KB of bit storage.
     bitset<SIZE> bits;
 
+    static size_t bitIndex(long long hash, size_t function) {
+        // Mix each hash separately so short strings do not cluster in nearby bits.
+        uint64_t value = static_cast<uint64_t>(hash)
+            + 0x9e3779b97f4a7c15ULL * (function + 1);
+        value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
+        value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
+        return (value ^ (value >> 31)) % SIZE;
+    }
+
 public:
-    void add(long long hash) {
-        long long step = hash / SIZE + 1;
-        for (int i = 0; i < 3; ++i) {
-            bits[(hash + i * step) % SIZE] = true;
+    void add(const HashValues& hashes) {
+        for (size_t i = 0; i < hashes.size(); ++i) {
+            bits[bitIndex(hashes[i], i)] = true;
         }
     }
 
-    bool mightContain(long long hash) const {
-        long long step = hash / SIZE + 1;
-        for (int i = 0; i < 3; ++i) {
-            if (!bits[(hash + i * step) % SIZE]) {
+    bool mightContain(const HashValues& hashes) const {
+        for (size_t i = 0; i < hashes.size(); ++i) {
+            if (!bits[bitIndex(hashes[i], i)]) {
                 return false;
             }
         }
@@ -35,12 +55,36 @@ public:
     }
 };
 
-long long getHash(const string& s) {
-    long long hash = 0;
+HashValues getHashes(const string& s) {
+    HashValues hashes{};
     for (unsigned char ch : s) {
-        hash = (hash * BASE + ch) % MOD;
+        for (size_t i = 0; i < hashes.size(); ++i) {
+            const auto& [base, modulus] = HASH_PARAMETERS[i];
+            hashes[i] = (hashes[i] * base + ch) % modulus;
+        }
     }
-    return hash;
+    return hashes;
+}
+
+HashValues getPowers(size_t length) {
+    HashValues powers;
+    powers.fill(1);
+    for (size_t position = 1; position < length; ++position) {
+        for (size_t i = 0; i < powers.size(); ++i) {
+            const auto& [base, modulus] = HASH_PARAMETERS[i];
+            powers[i] = (powers[i] * base) % modulus;
+        }
+    }
+    return powers;
+}
+
+void rollHashes(HashValues& hashes, const HashValues& powers,
+                unsigned char outgoing, unsigned char incoming) {
+    for (size_t i = 0; i < hashes.size(); ++i) {
+        const auto& [base, modulus] = HASH_PARAMETERS[i];
+        hashes[i] = (hashes[i] - outgoing * powers[i] % modulus + modulus) % modulus;
+        hashes[i] = (hashes[i] * base + incoming) % modulus;
+    }
 }
 
 vector<vector<size_t>> search(const string& text, const vector<string>& patterns) {
@@ -60,20 +104,17 @@ vector<vector<size_t>> search(const string& text, const vector<string>& patterns
         BloomFilter filter;
         unordered_map<long long, vector<size_t>> buckets;
         for (size_t id : ids) {
-            long long hash = getHash(patterns[id]);
-            filter.add(hash);
-            buckets[hash].push_back(id);
+            HashValues hashes = getHashes(patterns[id]);
+            filter.add(hashes);
+            // The first hash selects candidates; exact comparisons confirm matches.
+            buckets[hashes[0]].push_back(id);
         }
 
-        long long power = 1;
-        for (size_t i = 1; i < length; ++i) {
-            power = (power * BASE) % MOD;
-        }
-
-        long long hash = getHash(text.substr(0, length));
+        const HashValues powers = getPowers(length);
+        HashValues hashes = getHashes(text.substr(0, length));
         for (size_t start = 0; start <= text.size() - length; ++start) {
-            if (filter.mightContain(hash)) {
-                auto it = buckets.find(hash);
+            if (filter.mightContain(hashes)) {
+                auto it = buckets.find(hashes[0]);
                 if (it != buckets.end()) {
                     for (size_t id : it->second) {
                         // Hashes can collide, so check the actual text too.
@@ -87,8 +128,7 @@ vector<vector<size_t>> search(const string& text, const vector<string>& patterns
             if (start < text.size() - length) {
                 unsigned char outgoing = text[start];
                 unsigned char incoming = text[start + length];
-                hash = (hash - outgoing * power % MOD + MOD) % MOD;
-                hash = (hash * BASE + incoming) % MOD;
+                rollHashes(hashes, powers, outgoing, incoming);
             }
         }
     }

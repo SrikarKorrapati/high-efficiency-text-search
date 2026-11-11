@@ -38,7 +38,7 @@ Including input, the expected total is:
 O(n + S + k * log(d + 1) + n * d + C + Z)
 ```
 
-This assumes the expected constant-time operations of `unordered_map`. Rolling-hash updates and three-probe Bloom filter checks take constant time. Patterns longer than the text are skipped.
+This assumes the expected constant-time operations of `unordered_map`. The three separate polynomial hashes use different bases and moduli; updating all three rolling hashes and mixing their values for the three Bloom filter probes takes constant time per window. This adds a constant amount of hashing work compared with maintaining one hash, without changing the asymptotic bounds. Patterns longer than the text are skipped.
 
 The Bloom filter has a fixed 100,003 bits. Clearing it once per group is treated as constant work per group above. If its size were a variable `B`, initialization would add up to `O(d * B)` bit work.
 

@@ -2,13 +2,20 @@
 
 A simple C++ program that finds multiple patterns in a line of text using Rabin–Karp and a Bloom filter.
 
-Patterns are grouped by length. For each group, Rabin–Karp updates the hash as a window moves through the text. The Bloom filter skips hashes that cannot match any pattern in the group. Possible matches are looked up by hash and checked against the actual text, so hash collisions never produce incorrect results.
+Patterns are grouped by length. For each group, Rabin–Karp updates three separate polynomial hashes as a window moves through the text. Each hash uses its own base and modulus. The Bloom filter uses one probe from each hash, with integer mixing to spread short strings across the bitset. Possible matches are looked up using the first hash and checked against the actual text, so hash collisions never produce incorrect results.
 
 ## Build and run
 
 ```sh
 g++ -std=c++17 -O2 main.cpp -o text-search
 ./text-search
+```
+
+Run the search and rolling-hash regression checks:
+
+```sh
+g++ -std=c++17 -O2 tests/search_tests.cpp -o search-tests
+./search-tests
 ```
 
 ## Input
@@ -41,6 +48,6 @@ apple: not found
 
 Positions start at zero and count bytes. Search is case-sensitive and includes overlapping matches. Results appear in input order, including duplicate patterns. An empty text or zero patterns is allowed.
 
-The text is scanned once per distinct pattern length. Exact comparisons add work for candidate matches. The Bloom filter uses 100,003 bits and three probes; it can return false positives, which the later checks reject. It is an extra prefilter, and does not guarantee a speedup for every input.
+The text is scanned once per distinct pattern length. Exact comparisons add work for candidate matches. The Bloom filter uses 100,003 bits and three probes from separately computed hashes. These deterministic hashes are not a claim of mathematical independence. The filter can return false positives, which the later checks reject. It is an extra prefilter, and does not guarantee a speedup for every input.
 
 See [COMPLEXITY.md](COMPLEXITY.md) for the time and space complexity before and after this approach.
