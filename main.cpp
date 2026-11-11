@@ -13,6 +13,7 @@ const long long MOD = 1000000007;
 
 class BloomFilter {
     static const int SIZE = 100003;
+    // 100,003 bits require approximately 12.5 KB of bit storage.
     bitset<SIZE> bits;
 
 public:
